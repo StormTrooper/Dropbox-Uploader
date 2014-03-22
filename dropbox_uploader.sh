@@ -885,12 +885,13 @@ function db_mkdir
 function db_list
 {
     local DIR_DST=$(normalize_path "$1")
+	 
 
-    print " > Listing \"$DIR_DST\"... "
-    $CURL_BIN $CURL_ACCEPT_CERTIFICATES -s --show-error --globoff -i -o "$RESPONSE_FILE" "$API_METADATA_URL/$ACCESS_LEVEL/$(urlencode "$DIR_DST")?oauth_consumer_key=$APPKEY&oauth_token=$OAUTH_ACCESS_TOKEN&oauth_signature_method=PLAINTEXT&oauth_signature=$APPSECRET%26$OAUTH_ACCESS_TOKEN_SECRET&oauth_timestamp=$(utime)&oauth_nonce=$RANDOM" 2> /dev/null
+print " > Listing \"$DIR_DST\"... "
+    $CURL_BIN $CURL_ACCEPT_CERTIFICATES -s --show-error --globoff -i -o "$RESPONSE_FILE" "$API_METADATA_URL/$ACCESS_LEVEL/$(urlencode "$DIR_DST")?oauth_consumer_key=$APPKEY&oauth_token=$OAUTH_ACCESS_TOKEN&oauth_signature_method=PLAINTEXT&oauth_signature=$APPSECRET%26$OAUTH_ACCESS_TOKEN_SECRET&oauth_timestamp=$(utime)&oauth_nonce=$RANDOM"  
     check_http_response
-
     #Check
+
     if grep -q "^HTTP/1.1 200 OK" "$RESPONSE_FILE"; then
 
         local IS_DIR=$(sed -n 's/^\(.*\)\"contents":.\[.*/\1/p' "$RESPONSE_FILE")
@@ -907,29 +908,30 @@ function db_list
 {/g')
 
             #Converting escaped quotes to unicode format and extracting files and subfolders
-            echo "$DIR_CONTENT" | sed 's/\\"/\\u0022/' | sed -n 's/.*"bytes": *\([0-9]*\),.*"path": *"\([^"]*\)",.*"is_dir": *\([^"]*\),.*/\2:\3;\1/p' > $RESPONSE_FILE
+           
+		echo "$DIR_CONTENT" | sed 's/\\"/\\u0022/' | sed -n 's/.*"bytes": *\([0-9]*\),.*"modified": *"\([^"]*\)",.*"path": *"\([^"]*\)",.*"is_dir": *\([^,]*\),.*/\3:\4;\1;\2/p' > $RESPONSE_FILE 
+
+		#echo "$DIR_CONTENT" | sed 's/\\"/\\u0022/' | sed -n 's/.*"bytes": *\([0-9]*\),.*"path": *"\([^"]*\)",.*"is_dir": *\([^"]*\),.*/\2:\3;\1/p' > $RESPONSE_FILE
 
             #Looking for the biggest file size
             #to calculate the padding to use
+
             local padding=0
             while read -r line; do
-                local FILE=${line%:*}
-                local META=${line##*:}
-                local SIZE=${META#*;}
-
+		local META=${line#*;}
+                local SIZE=${META%;*}
                 if (( ${#SIZE} > $padding )); then
                     padding=${#SIZE}
                 fi
             done < $RESPONSE_FILE
-
             #For each entry...
             while read -r line; do
-
-                local FILE=${line%:*}
-                local META=${line##*:}
-                local TYPE=${META%;*}
-                local SIZE=${META#*;}
-
+                local FILE=${line%%:*}
+		local META=${line#*:}
+		local TYPE=${META%%;*}
+		local META=${line#*;}
+		local SIZE=${META%;*}
+		local MODIFIED=${META#*;}
                 #Removing unneeded /
                 FILE=${FILE##*/}
 
@@ -940,8 +942,7 @@ function db_list
                 fi
 
                 FILE=$(echo -e "$FILE")
-                printf " [$TYPE] %-${padding}s %s\n" "$SIZE" "$FILE"
-
+                printf " [$TYPE] %-${padding}s %s %s\n" "$SIZE" "$FILE" "$MODIFIED"
             done < $RESPONSE_FILE
 
         #It's a file
